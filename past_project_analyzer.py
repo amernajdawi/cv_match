@@ -105,9 +105,18 @@ def extract_matched_employees(matching_result):
     if not matching_result:
         return []
         
-    pattern = r'(\w+\s+\w+)\s*-\s*(\d+)%\s*-\s*(.+?)(?=\n\n|\n\w|\Z)'
+    # Updated primary pattern to match "Skills Match %:" format
+    pattern = r'(\w+\s+\w+)\s*-\s*Skills Match %:\s*(\d+)%\s*-\s*(.+?)(?=\n\n|\n\w|\Z)'
     
+    # Fallback pattern for older format
+    fallback_pattern = r'(\w+\s+\w+)\s*-\s*(\d+)%\s*-\s*(.+?)(?=\n\n|\n\w|\Z)'
+    
+    # Try the primary pattern first
     matches = re.findall(pattern, matching_result, re.DOTALL)
+    
+    # If no matches, try the fallback pattern
+    if not matches:
+        matches = re.findall(fallback_pattern, matching_result, re.DOTALL)
     
     employees = []
     for match in matches:
@@ -122,6 +131,9 @@ def extract_matched_employees(matching_result):
                 'skills': skills
             })
     
+    # Sort by match percentage (highest first)
+    employees.sort(key=lambda x: int(x['match_percentage']), reverse=True)
+    
     return employees
 
 def analyze_past_projects(project_description, min_similarity=0.6, matching_result=None):
@@ -133,6 +145,27 @@ def analyze_past_projects(project_description, min_similarity=0.6, matching_resu
     matched_employees = []
     if matching_result:
         matched_employees = extract_matched_employees(matching_result)
+    
+    # Even if no employees match the minimum threshold, continue with the closest matches
+    if not matched_employees and matching_result:
+        # Try to extract with a more lenient pattern to find any percentage matches
+        pattern = r'(\w+\s+\w+)\s*-\s*Skills Match %:\s*(\d+)%\s*-\s*(.+?)(?=\n\n|\n\w|\Z)'
+        matches = re.findall(pattern, matching_result, re.DOTALL)
+        
+        for match in matches:
+            if len(match) >= 3:
+                name = match[0].strip()
+                match_percentage = match[1].strip()
+                skills = match[2].strip()
+                
+                matched_employees.append({
+                    'name': name,
+                    'match_percentage': match_percentage,
+                    'skills': skills
+                })
+        
+        # Sort by match percentage (highest first)
+        matched_employees.sort(key=lambda x: int(x['match_percentage']), reverse=True)
     
     past_projects_data = ""
     project_counter = 1
@@ -153,6 +186,9 @@ def analyze_past_projects(project_description, min_similarity=0.6, matching_resu
         matched_employees_data = "\n\nMATCHED EMPLOYEES:\n"
         for emp in matched_employees:
             matched_employees_data += f"- {emp['name']} - {emp['match_percentage']}% - {emp['skills']}\n"
+    else:
+        matched_employees_data = "\n\nNO EMPLOYEES MATCHED THE MINIMUM THRESHOLD. CLOSEST MATCHES:\n"
+        # This section would be filled if we had found any close matches with the more lenient pattern
     
     prompt = (
         f"Project Description:\n\n{project_description}\n\n"
@@ -191,7 +227,17 @@ def post_process_response(response, matched_employees):
         employee_names = [emp["name"] for emp in matched_employees]
     
     if not employee_names:
-        return response
+        print("No employees found in the response. Showing closest matches instead.")
+        # Extract any employee names from the response using a more lenient pattern
+        employee_pattern = r'(\w+\s+\w+)\s*-\s*Skills Match %:\s*(\d+)%'
+        potential_matches = re.findall(employee_pattern, response, re.DOTALL)
+        
+        if potential_matches:
+            print(f"Found {len(potential_matches)} potential closest matches.")
+            employee_names = [match[0].strip() for match in potential_matches]
+        else:
+            print("Cannot extract any employee names from the response.")
+            return response + "\n\nNo employees found for project assignment. Please check your CV data or try with a different project description."
     
     print(f"Employee names for distribution: {employee_names}")
     
@@ -204,6 +250,11 @@ def post_process_response(response, matched_employees):
             experience_levels[name] = years
         else:
             experience_levels[name] = 4
+    
+    # For employees not in matched_employees but found in the response
+    for name in employee_names:
+        if name not in experience_levels:
+            experience_levels[name] = 3  # Default experience level
     
     print(f"Experience levels: {experience_levels}")
     

@@ -441,35 +441,26 @@ if st.button("Match Project with Team CVs", type="primary"):
                     with st.spinner("Analyzing past projects..."):
                         try:
                             # Pass the CV matching results to the past project analyzer
-                            past_project_analysis = analyze_past_projects(
-                                project_description, 
+                            matched_employees = extract_matched_employees(response)
+                            
+                            if not matched_employees:
+                                st.info("The system will still display the employees with the closest skills match, even if they don't meet the minimum threshold.")
+                            
+                            project_analysis = analyze_past_projects(
+                                project_description,
                                 min_similarity=past_project_min_similarity/100.0,
                                 matching_result=response
                             )
                             
                             # Add debug output to show what's happening
-                            st.info(f"Raw past project analysis result received. Length: {len(past_project_analysis) if past_project_analysis else 0}")
+                            st.info(f"Raw past project analysis result received. Length: {len(project_analysis) if project_analysis else 0}")
                             
-                            if past_project_analysis and "No past project data found" not in past_project_analysis:
-                                # Extract matched employees from the CV matching results
-                                matched_employees = extract_matched_employees(response)
-                                
-                                # Add debug output for matched employees
-                                st.info(f"Matched employees extracted: {len(matched_employees) if matched_employees else 0}")
-                                if matched_employees:
-                                    st.info(f"Employee names: {', '.join([emp['name'] for emp in matched_employees])}")
-                                
-                                # Fall back to hard-coded employees if none found
-                                if not matched_employees or len(matched_employees) == 0:
-                                    st.warning("No employees found in the response. Cannot proceed with employee assignment.")
-                                    st.info("Please try again with a different project description or check your CV data.")
-                                    st.stop()  # Stop execution of the current app run
-                                
+                            if project_analysis and "No past project data found" not in project_analysis:
                                 # Post-process the response to add matched employees to each project
-                                past_project_analysis = post_process_response(past_project_analysis, matched_employees)
+                                project_analysis = post_process_response(project_analysis, matched_employees)
                                 
                                 # Extract JSON from response
-                                json_data = extract_json_from_analysis(past_project_analysis)
+                                json_data = extract_json_from_analysis(project_analysis)
                                 
                                 if json_data:
                                     # Save individual JSON files for each employee
@@ -517,12 +508,12 @@ if st.button("Match Project with Team CVs", type="primary"):
                                 else:
                                     st.warning("No JSON data found in the response. Check if the AI correctly formatted the output.")
                                 
-                                st.session_state.past_project_analysis = past_project_analysis
+                                st.session_state.past_project_analysis = project_analysis
                                 st.success(f"Past project analysis completed with {len(matched_employees)} employees distributed across matching projects")
                                 
                             else:
                                 st.warning("No similar past projects found or no project data available")
-                                st.code(past_project_analysis[:500] + "..." if past_project_analysis and len(past_project_analysis) > 500 else past_project_analysis)
+                                st.code(project_analysis[:500] + "..." if project_analysis and len(project_analysis) > 500 else project_analysis)
                                 
                         except Exception as e:
                             st.error(f"Error analyzing past projects: {str(e)}")
