@@ -20,6 +20,7 @@ def create_cv_pdf(json_data, output_path, debug=False):
     try:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
+        
         if debug:
             print(f"Creating PDF at {output_path}")
             print(f"JSON data: {json.dumps(json_data, indent=2)}")

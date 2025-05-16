@@ -50,3 +50,7 @@ Thumbs.db
 ~$*.xls
 ~$*.xlsm
 ~$*.xlsb 
+
+# PDF folder
+employee_projects/
+employee_projects_pdfs/
